@@ -15,13 +15,8 @@ class ImportBookmarks extends Component
     public function updatedBookmarkFile()
     {
         app(ImportBookmarksFormJSONFileAction::class)->execute($this->bookmarkFile);
+        $this->emit('bookmarksImported');
         session()->flash('success', 'successfully saved.');
-        $this->resetFile();
-    }
-
-    private function resetFile()
-    {
-        $this->bookmarkFile = null;
     }
 
     public function render()
