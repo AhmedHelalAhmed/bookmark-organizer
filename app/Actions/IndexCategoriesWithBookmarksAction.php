@@ -13,6 +13,8 @@ class IndexCategoriesWithBookmarksAction
      */
     public function execute()
     {
-        return Category::with('bookmarks')->paginate(1);
+        return Category::with('bookmarks')
+            ->where('user_id', auth()->id())
+            ->paginate(1);
     }
 }
