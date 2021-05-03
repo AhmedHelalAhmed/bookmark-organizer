@@ -5,13 +5,15 @@ namespace App\Actions;
 
 use App\Entities\StoreBookmarkEntity;
 use App\Entities\StoreCategoryEntity;
+use App\Enums\BookmarkEnum;
+use App\Enums\CategoryEnum;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 
 class ImportBookmarksFormJSONFileAction
 {
     private $bookmarks;
-    private $category;
+    private $categories;
 
     public function execute(UploadedFile $file)
     {
@@ -27,14 +29,17 @@ class ImportBookmarksFormJSONFileAction
 
     private function save()
     {
-        $countAll = $this->bookmarks->count();
-        $this->bookmarks->each(function (array $bookmark, $key) use ($countAll) {
+        $this->bookmarks->each(function (array $bookmark, $key) {
             if ($this->isCategory($bookmark)) {
-                $this->category = app(StoreCategoryAction::class)
-                    ->execute($this->createCategoryEntity($bookmark));
+                $this->createCategory($bookmark, intval($bookmark['id']));
             } else {
-                app(StoreBookmarkAction::class)
-                    ->execute($this->createBookEntity($bookmark), $this->category->id);
+                if ($this->isLinkNotBelongsToFolder($bookmark)) {
+                    $this->createCategory([
+                        'title' => CategoryEnum::FIRST_LEVEL_CATEGORY_NAME
+                    ], BookmarkEnum::FIRST_LEVEL);
+                }
+
+                $this->createBookmark($bookmark, $this->getCategory(intval($bookmark['parentId'])));
             }
         });
     }
@@ -46,6 +51,49 @@ class ImportBookmarksFormJSONFileAction
     private function isCategory(array $bookmark)
     {
         return !array_key_exists('url', $bookmark);
+    }
+
+    /**
+     * @param $category
+     * @param int $oldId
+     */
+    private function createCategory($category, int $oldId)
+    {
+        $this->categories[intval($oldId)] = app(StoreCategoryAction::class)
+            ->execute($this->createCategoryEntity($category));
+    }
+
+    /**
+     * @param array $bookmark
+     * @return StoreCategoryEntity
+     */
+    private function createCategoryEntity(array $bookmark): StoreCategoryEntity
+    {
+        return (new StoreCategoryEntity())
+            ->setName($bookmark['title'])
+            ->setUserId(auth()->id());
+    }
+
+    /**
+     * @param array $bookmark
+     * @return bool
+     */
+    private function isLinkNotBelongsToFolder(array $bookmark)
+    {
+        return intval($bookmark['parentId']) === BookmarkEnum::FIRST_LEVEL;
+    }
+
+    /**
+     * @param $bookmark
+     * @param $categoryId
+     */
+    private function createBookmark($bookmark, $categoryId)
+    {
+        (new StoreBookmarkAction())
+            ->execute(
+                $this->createBookEntity($bookmark),
+                $categoryId
+            );
     }
 
     /**
@@ -61,13 +109,18 @@ class ImportBookmarksFormJSONFileAction
     }
 
     /**
-     * @param array $bookmark
-     * @return StoreCategoryEntity
+     * @param int $parentId
+     * @return int
      */
-    private function createCategoryEntity(array $bookmark): StoreCategoryEntity
+    private function getCategory(int $parentId)
     {
-        return (new StoreCategoryEntity())
-            ->setName($bookmark['title'])
-            ->setUserId(auth()->id());
+        if (isset($this->categories[$parentId])) {
+            return $this->categories[$parentId]->id;
+        }
+
+        $this->createCategory([
+            'title' => CategoryEnum::OTHER_BOOKMARKS_CATEGORY_NAME
+        ], BookmarkEnum::SECOND_LEVEL);
+        return $this->categories[BookmarkEnum::SECOND_LEVEL]->id;
     }
 }

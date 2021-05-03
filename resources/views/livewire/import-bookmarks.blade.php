@@ -1,4 +1,4 @@
-<div class="container mx-auto">
+<div class="mx-auto">
     @if ($errors->any())
         <div class="bg-red-200 relative text-red-500 py-3 px-3 rounded-lg">
             @foreach ($errors->all() as $error)
